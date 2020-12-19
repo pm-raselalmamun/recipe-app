@@ -16,6 +16,8 @@ To Create Recipe App API with Django & Test Project
 > - <a href="#travis">3. Travis CI & Flake8 Setup </a>
 
 > - <a href="#postgres">4. Setup PostgreSQL Database </a>
+
+> - <a href="#management">5. Create User Management Endpoints </a>
 ## 1. Docker Environment Setup <a href="" name="docker"> - </a>
 
 1. Create Files - `Dockerfile` & `requirements.txt` & `docker-compose.yml`
@@ -417,4 +419,348 @@ class CommandTests(TestCase):
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
 `docker-compose run app sh -c "python manage.py makemigrations"`\
 `docker-compose run app sh -c "python manage.py migrate"`\
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+## 5. Create User Management Endpoints <a href="" name="management"> - </a>
+
+> - <a href="#endpoints">I. Create User Endpoints </a>
+
+> - <a href="#token">II. Create a New Token</a>
+
+> - <a href="#user_management">III. User Management Endpoints</a>
+
+### I. Create User Endpoints <a href="" name="endpoints"> - </a>
+
+1. Create a User App - `docker-compose run app sh -c 'django-admin startapp user'`
+
+2. Define App into settings.py - `INSTALLED_APPS = ['user.apps.UserConfig']`
+
+3. Add URL into urls.py - `urlpatterns = [path('api/user/', include('user.urls'))]`
+
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > serializers.py -
+
+```py
+from django.contrib.auth import get_user_model
+from rest_framework import serializers
+
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer for the users object"""
+
+    class Meta:
+        model = get_user_model()
+        fields = ('email', 'password', 'name')
+        extra_kwargs = {'password': {'write_only': True, 'min_length': 5}}
+
+    def create(self, validated_data):
+        """Create a new user with encrypted password and return it"""
+        return get_user_model().objects.create_user(**validated_data)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > views.py -
+
+```py
+from .serializers import UserSerializer
+from rest_framework import generics
+
+
+class CreateUserView(generics.CreateAPIView):
+    """Create a new user in the system"""
+    serializer_class = UserSerializer
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > urls.py -
+
+```py
+from django.urls import path
+from .views import CreateUserView
+
+app_name = 'user'
+
+urlpatterns = [
+    path('create/', CreateUserView.as_view(), name='create'),
+]
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > tests > test_user_api.py -
+
+```py
+from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+from rest_framework.test import APIClient
+from rest_framework import status
+
+CREATE_USER_URL = reverse('user:create')
+
+
+def create_user(**params):
+    return get_user_model().objects.create_user(**params)
+
+
+class PublicUserApiTests(TestCase):
+    """Test the users API (public)"""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_create_valid_user_success(self):
+        """Test creating user with valid payload is successful"""
+        payload = {
+            'email': 'test@gmail.com',
+            'password': 'testpass',
+            'name': 'Test name'
+        }
+        response = self.client.post(CREATE_USER_URL, payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = get_user_model().objects.get(**response.data)
+        self.assertTrue(user.check_password(payload['password']))
+        self.assertNotIn('password', response.data)
+
+    def test_user_exists(self):
+        """Test creatinga  user that already exists fails"""
+        payload = {
+            'email': 'test@gmail.com',
+            'password': 'testpass',
+            'name': 'Test',
+        }
+        create_user(**payload)
+        response = self.client.post(CREATE_USER_URL, payload)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_password_too_short(self):
+        """Test that the password must be more than 5 characters"""
+        payload = {
+            'email': 'test@gmail.com',
+            'password': 'pw',
+            'name': 'Test',
+        }
+        response = self.client.post(CREATE_USER_URL, payload)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        user_exists = get_user_model().objects.filter(
+            email=payload['email']
+        ).exists()
+        self.assertFalse(user_exists)
+
+```
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+
+### II. Create a New Token <a href="" name="token"> - </a>
+
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > serializers.py -
+
+```py
+from django.utils.translation import ugettext_lazy as _
+from django.contrib.auth import authenticate
+
+class AuthTokenSerializer(serializers.Serializer):
+    """Serializer for the user authentication object"""
+    email = serializers.CharField()
+    password = serializers.CharField(
+        style={'input_type': 'password'},
+        trim_whitespace=False
+    )
+
+    def validate(self, attrs):
+        """Validate and authenticate the user"""
+        email = attrs.get('email')
+        password = attrs.get('password')
+
+        user = authenticate(
+            request=self.context.get('request'),
+            username=email,
+            password=password
+        )
+        if not user:
+            massage = _('Unable to authenticate with provided credentials')
+            raise serializers.ValidationError(massage, code='authentication')
+
+        attrs['user'] = user
+        return attrs
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > views.py -
+
+```py
+from rest_framework.settings import api_settings
+from rest_framework.authtoken.views import ObtainAuthToken
+from .serializers import AuthTokenSerializer
+
+class CreateTokenView(ObtainAuthToken):
+    """Create a new auth token for user"""
+    serializer_class = AuthTokenSerializer
+    renderer_classes = api_settings.DEFAULT_RENDERER_CLASSES
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > urls.py -
+
+```py
+from .views import CreateTokenView
+
+urlpatterns = [
+    path('token/', CreateTokenView.as_view(), name='token'),
+]
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > tests > test_user_api.py -
+
+```py
+TOKEN_URL = reverse('user:token')
+
+class PublicUserApiTests(TestCase):
+    def test_create_token_for_user(self):
+        """Test that a token is created for the user"""
+        payload = {
+            'email': 'test@gmail.com',
+            'password': 'testpass',
+            'name': 'Test',
+        }
+        create_user(**payload)
+        response = self.client.post(TOKEN_URL, payload)
+
+        self.assertIn('token', response.data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_create_token_invalid_credentials(self):
+        """Test that token is not created if invalid credentials are given"""
+        create_user(email='test@gmil.com', password="testpass")
+        payload = {
+            'email': 'test@gmail.com',
+            'password': 'wrong',
+            'name': 'Test',
+        }
+        response = self.client.post(TOKEN_URL, payload)
+
+        self.assertNotIn('token', response.data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_token_no_user(self):
+        """Test that token is not created if user doesn't exist"""
+        payload = {
+            'email': 'test@gmail.com',
+            'password': 'testpass',
+            'name': 'Test'
+        }
+        response = self.client.post(TOKEN_URL, payload)
+
+        self.assertNotIn('token', response.data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_token_missing_field(self):
+        """Test that email and password are required"""
+        response = self.client.post(TOKEN_URL, {'email': 'one', 'password': ''})
+        self.assertNotIn('token', response.data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+### III. User Management Endpoints <a href="" name="user_management"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > serializers.py -
+
+```py
+class UserSerializer(serializers.ModelSerializer):
+    def update(self, instance, validated_data):
+        """Update a user, setting the password correctly and return it"""
+        password = validated_data.pop('password', None)
+        user = super().update(instance, validated_data)
+
+        if password:
+            user.set_password(password)
+            user.save()
+
+        return user
+```
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > views.py -
+
+```py
+from rest_framework import authentication, generics, permissions
+
+class ManageUserView(generics.RetrieveUpdateAPIView):
+    """Manage the authenticated user"""
+    serializer_class = UserSerializer
+    authentication_classes = (authentication.TokenAuthentication,)
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_object(self):
+        """Retrieve and return authentication user"""
+        return self.request.user
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > urls.py -
+
+```py
+from .views import ManageUserView
+
+urlpatterns = [
+    path('me/', ManageUserView.as_view(), name='me'),
+]
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > tests > test_user_api.py -
+
+```py
+ME_URL = reverse('user:me')
+
+class PublicUserApiTests(TestCase):
+    def test_retrieve_user_unauthorized(self):
+        """Test that authentication is required for users"""
+        response = self.client.get(ME_URL)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PrivateUserApiTests(TestCase):
+    """Test API requests that require authentication"""
+
+    def setUp(self):
+        self.user = create_user(
+            email='test@gmail.com',
+            password='testpass',
+            name='name'
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_retrieve_profile_success(self):
+        """Test retrieving profile for logged in user"""
+        response = self.client.get(ME_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {
+            'name': self.user.name,
+            'email': self.user.email
+        })
+
+    def test_post_me_not_allowed(self):
+        """Test that POST is not allowed on the me url"""
+        response = self.client.post(ME_URL, {})
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_update_user_profile(self):
+        """Test updating the user profile for authenticated user"""
+        payload = {'name': 'new name', 'password': 'newpassword'}
+
+        response = self.client.patch(ME_URL, payload)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.name, payload['name'])
+        self.assertTrue(self.user.check_password(payload['password']))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
 `docker-compose run app sh -c "python manage.py test && flake8"`
