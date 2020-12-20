@@ -18,6 +18,9 @@ To Create Recipe App API with Django & Test Project
 > - <a href="#postgres">4. Setup PostgreSQL Database </a>
 
 > - <a href="#management">5. Create User Management Endpoints </a>
+
+> - <a href="#tags">6. Create Tags Endpoints </a>
+
 ## 1. Docker Environment Setup <a href="" name="docker"> - </a>
 
 1. Create Files - `Dockerfile` & `requirements.txt` & `docker-compose.yml`
@@ -763,4 +766,233 @@ class PrivateUserApiTests(TestCase):
 ```
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+
+## 6. Create Tags Endpoints <a href="" name="tags"> - </a>
+
+> - <a href="#tag_model">I. Create Tag Model </a>
+
+> - <a href="#tag_endpoints">II. Create Tag Endpoints </a>
+
+### I. Create Tag Model <a href="" name="tag_model"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > models.py -
+
+```py
+from django.conf import settings
+
+class Tag(models.Model):
+    """Tag to be used for a recipe"""
+    name = models.CharField(max_length=255)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.name
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > admin.py -
+
+```py
+from .models import Tag
+
+class TagAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'user']
+
+    class Meta:
+        model = Tag
+
+admin.site.register(Tag, TagAdmin)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > tests > test_models.py
+
+```py
+from core.models import Tag
+
+def sample_user(email='test@gmail.com', password='testpass'):
+    """Create a sample user"""
+    return get_user_model().objects.create_user(email, password)
+
+
+class UserAccountTests(TestCase):
+    def test_tag_str(self):
+        """Test the tag string representation"""
+        tag = Tag.objects.create(
+            user=sample_user(),
+            name='Vegan'
+        )
+
+        self.assertEqual(str(tag), tag.name)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py makemigrations"`\
+`docker-compose run app sh -c "python manage.py migrate"`\
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+### II. Create Tag Endpoints <a href="" name="tag_endpoints"> - </a>
+
+1. Create a User App - `docker-compose run app sh -c 'django-admin startapp recipe'`
+
+2. Define App into settings.py - `INSTALLED_APPS = ['recipe.apps.RecipeConfig']`
+
+3. Add URL into urls.py - `urlpatterns = [path('api/recipe/', include('recipe.urls'))]`
+
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > serializers.py -
+
+```py
+from core.models import Tag
+from rest_framework import serializers
+
+
+class TagSerializer(serializers.ModelSerializer):
+    """Serializer for tag objects"""
+
+    class Meta:
+        model = Tag
+        fields = ('id', 'name')
+        read_only_fields = ('id',)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > views.py -
+
+```py
+from core.models import Tag
+from .serializers import TagSerializer
+from rest_framework import viewsets, mixins
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+
+
+class TagViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateModelMixin):
+    """Manage tags in the database"""
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    queryset = Tag.objects.all()
+    serializer_class = TagSerializer
+
+    def get_queryset(self):
+        """Return objects for the current authenticated user only"""
+        queryset = self.queryset
+        return queryset.filter(user=self.request.user).order_by('-name')
+
+    def perform_create(self, serializer):
+        """Create a new object"""
+        serializer.save(user=self.request.user)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > urls.py -
+
+```py
+from .views import TagViewSet
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
+
+router = DefaultRouter()
+router.register('tags', TagViewSet)
+
+
+app_name = 'recipe'
+
+urlpatterns = [
+    path('', include(router.urls))
+]
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_tags.py -
+
+```py
+from core.models import Tag
+from django.urls import reverse
+from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APIClient
+from recipe.serializers import TagSerializer
+from django.contrib.auth import get_user_model
+
+
+TAGS_URL = reverse('recipe:tag-list')
+
+
+class PublicTagsApiTests(TestCase):
+    """Test thje publicly available tags API"""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_login_required(self):
+        """Test that login is required for retrieving tags"""
+        response = self.client.get(TAGS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PrivateTagsApiTests(TestCase):
+    """Test the authorized user tags API"""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            'test@gmail.com',
+            'password'
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_retrieve_tags(self):
+        """Test retrieving tags"""
+        Tag.objects.create(user=self.user, name='Vegan')
+        Tag.objects.create(user=self.user, name='Dessert')
+
+        response = self.client.get(TAGS_URL)
+
+        tags = Tag.objects.all().order_by('-name')
+        serializer = TagSerializer(tags, many=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, serializer.data)
+
+    def test_tags_limited_to_user(self):
+        """Test that tags returned are for the authenticated user"""
+        user2 = get_user_model().objects.create_user(
+            'other@gmail.com',
+            'testpass'
+        )
+        Tag.objects.create(user=user2, name='Fruity')
+        tag = Tag.objects.create(user=self.user, name='Comfort Food')
+
+        response = self.client.get(TAGS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['name'], tag.name)
+
+    def test_create_tag_successful(self):
+        """Test creating a new tag"""
+        payload = {'name': 'Test tag'}
+        self.client.post(TAGS_URL, payload)
+
+        exists = Tag.objects.filter(
+            user=self.user,
+            name=payload['name']
+        ).exists()
+        self.assertTrue(exists)
+
+    def test_create_tag_invalid(self):
+        """Test creating a new tag with invalid payload"""
+        payload = {'name': ''}
+        res = self.client.post(TAGS_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
 `docker-compose run app sh -c "python manage.py test && flake8"`
