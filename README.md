@@ -1,11 +1,11 @@
 # <img width="30" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/apple.svg" />&nbsp; Recipe App Api
 
+[![Build Status](https://www.travis-ci.com/pm-raselalmamun/recipe-app.svg?branch=main)](https://www.travis-ci.com/pm-raselalmamun/recipe-app)
+
 <a href="https://github.com/"><img src="https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white" /></a>
 <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-14354C?style=for-the-badge&logo=python&logoColor=white" /></a>
 <a href="https://www.djangoproject.com/"><img src="https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white" /></a>
 <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" /></a>
-
-
 
 To Create Recipe App API with Django & Test Project
 
@@ -20,6 +20,8 @@ To Create Recipe App API with Django & Test Project
 > - <a href="#management">5. Create User Management Endpoints </a>
 
 > - <a href="#tags">6. Create Tags Endpoints </a>
+
+> - <a href="#ingredients">7. Create Ingredients Endpoints </a>
 
 ## 1. Docker Environment Setup <a href="" name="docker"> - </a>
 
@@ -77,7 +79,6 @@ services:
 1. Create a Django Project - `docker-compose run app sh -c 'django-admin startproject app .'`
 
 2. Create a Django App - `docker-compose run app sh -c 'django-admin startapp core'`
-
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > models.py -
 
@@ -180,7 +181,6 @@ class UserAccountTests(TestCase):
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > app > settings.py - `AUTH_USER_MODEL = 'core.User'`
 
-
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > admin.py -
 
 ```py
@@ -267,7 +267,7 @@ class AdminSiteTests(TestCase):
 
 ## 3. Travis CI & Flake8 Setup <a href="" name="travis"> - </a>
 
-1. Enable github Repositorie at `https://travis-ci.org/` 
+1. Enable github Repositorie at `https://travis-ci.org/`
 2. Create Files - `.travis.yml` & app > `.flake8`
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/travisci.svg" /> &nbsp;&nbsp; .travis.yml -
@@ -325,8 +325,8 @@ RUN apk del .tmp-build-deps
 
 ```yml
     command: >
-      sh -c "python manage.py wait_for_db && 
-             python manage.py migrate && 
+      sh -c "python manage.py wait_for_db &&
+             python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
     environment:
       - DB_HOST=db
@@ -363,6 +363,7 @@ DATABASES = {
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/keycdn.svg" /> &nbsp;&nbsp; requirements.txt - `psycopg2>=2.8.6,<2.9.0`
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp; Commands - `docker-compose build`
+
 ### II. Create Custom Command for Database with Test <a href="" name="custom"> - </a>
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" /> &nbsp;&nbsp; app > core > management > commands > wait_for_db.py -
@@ -391,7 +392,7 @@ class Command(BaseCommand):
 
 ```
 
-<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" /> &nbsp;&nbsp; app > core > tests > test_commands.py - 
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" /> &nbsp;&nbsp; app > core > tests > test_commands.py -
 
 ```py
 from unittest.mock import patch
@@ -419,11 +420,10 @@ class CommandTests(TestCase):
 
 ```
 
-<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp; Command - \
 `docker-compose run app sh -c "python manage.py makemigrations"`\
 `docker-compose run app sh -c "python manage.py migrate"`\
 `docker-compose run app sh -c "python manage.py test && flake8"`
-
 
 ## 5. Create User Management Endpoints <a href="" name="management"> - </a>
 
@@ -440,7 +440,6 @@ class CommandTests(TestCase):
 2. Define App into settings.py - `INSTALLED_APPS = ['user.apps.UserConfig']`
 
 3. Add URL into urls.py - `urlpatterns = [path('api/user/', include('user.urls'))]`
-
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > serializers.py -
 
@@ -550,13 +549,11 @@ class PublicUserApiTests(TestCase):
         self.assertFalse(user_exists)
 
 ```
-<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp; Command - \
 `docker-compose run app sh -c "python manage.py test && flake8"`
 
-
-
 ### II. Create a New Token <a href="" name="token"> - </a>
-
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > serializers.py -
 
@@ -665,9 +662,8 @@ class PublicUserApiTests(TestCase):
 
 ```
 
-<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp; Command - \
 `docker-compose run app sh -c "python manage.py test && flake8"`
-
 
 ### III. User Management Endpoints <a href="" name="user_management"> - </a>
 
@@ -686,6 +682,7 @@ class UserSerializer(serializers.ModelSerializer):
 
         return user
 ```
+
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > user > views.py -
 
 ```py
@@ -765,10 +762,8 @@ class PrivateUserApiTests(TestCase):
 
 ```
 
-<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;  Command - \
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp; Command - \
 `docker-compose run app sh -c "python manage.py test && flake8"`
-
-
 
 ## 6. Create Tags Endpoints <a href="" name="tags"> - </a>
 
@@ -832,7 +827,6 @@ class UserAccountTests(TestCase):
 `docker-compose run app sh -c "python manage.py migrate"`\
 `docker-compose run app sh -c "python manage.py test && flake8"`
 
-
 ### II. Create Tag Endpoints <a href="" name="tag_endpoints"> - </a>
 
 1. Create a User App - `docker-compose run app sh -c 'django-admin startapp recipe'`
@@ -840,7 +834,6 @@ class UserAccountTests(TestCase):
 2. Define App into settings.py - `INSTALLED_APPS = ['recipe.apps.RecipeConfig']`
 
 3. Add URL into urls.py - `urlpatterns = [path('api/recipe/', include('recipe.urls'))]`
-
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > serializers.py -
 
@@ -989,6 +982,226 @@ class PrivateTagsApiTests(TestCase):
         """Test creating a new tag with invalid payload"""
         payload = {'name': ''}
         res = self.client.post(TAGS_URL, payload)
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+## 7. Create Ingredients Endpoints <a href="" name="ingredients"> - </a>
+
+> - <a href="#ingredients_model">I. Create Ingredients Model </a>
+
+> - <a href="#ingredients_endpoints">II. Create Ingredients Endpoints </a>
+
+### I. Create Ingredients Model <a href="" name="ingredients_model"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > models.py -
+
+```py
+from django.conf import settings
+
+class Ingredient(models.Model):
+    """Ingredient to be used in a recipe"""
+    name = models.CharField(max_length=255)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.name
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > admin.py -
+
+```py
+from .models import Ingredient
+
+class IngredientAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'user']
+
+    class Meta:
+        model = Ingredient
+
+
+admin.site.register(Ingredient, IngredientAdmin)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > tests > test_models.py
+
+```py
+from core.models import Ingredient
+
+def sample_user(email='test@gmail.com', password='testpass'):
+    """Create a sample user"""
+    return get_user_model().objects.create_user(email, password)
+
+
+class UserAccountTests(TestCase):
+    def test_ingredient_str(self):
+        """Test the ingredient string respresentation"""
+        ingredient = Ingredient.objects.create(
+            user=sample_user(),
+            name='Cucumber'
+        )
+
+        self.assertEqual(str(ingredient), ingredient.name)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py makemigrations"`\
+`docker-compose run app sh -c "python manage.py migrate"`\
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+### II. Create Ingredients Endpoints <a href="" name="ingredients_endpoints"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > serializers.py -
+
+```py
+from core.models import Ingredient
+
+
+class IngredientSerializer(serializers.ModelSerializer):
+    """Serializer for ingredient objects"""
+
+    class Meta:
+        model = Ingredient
+        fields = ('id', 'name')
+        read_only_fields = ('id',)
+
+```
+
+#### Create Custom ViewSet Class -
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > views.py -
+
+```py
+from core.models import Tag, Ingredient
+from rest_framework import viewsets, mixins
+from rest_framework.permissions import IsAuthenticated
+from .serializers import TagSerializer, IngredientSerializer
+from rest_framework.authentication import TokenAuthentication
+
+
+class BaseRecipeAttrViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateModelMixin):
+    """Base viewset for user owned recipe attributes"""
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self):
+        """Return objects for the current authenticated user only"""
+        queryset = self.queryset
+        return queryset.filter(user=self.request.user).order_by('-name')
+
+    def perform_create(self, serializer):
+        """Create a new object"""
+        serializer.save(user=self.request.user)
+
+
+class TagViewSet(BaseRecipeAttrViewSet):
+    """Manage tags in the database"""
+    queryset = Tag.objects.all()
+    serializer_class = TagSerializer
+
+
+class IngredientViewSet(BaseRecipeAttrViewSet):
+    """Manage ingredients in the database"""
+    queryset = Ingredient.objects.all()
+    serializer_class = IngredientSerializer
+
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > urls.py -
+
+```py
+from .views import IngredientViewSet
+
+router.register('ingredients', IngredientViewSet)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_ingredients.py -
+
+```py
+from django.urls import reverse
+from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APIClient
+from core.models import Ingredient
+from django.contrib.auth import get_user_model
+from recipe.serializers import IngredientSerializer
+
+
+INGREDIENTS_URL = reverse('recipe:ingredient-list')
+
+
+class PublicIngredientsApiTests(TestCase):
+    """Test the publicly available ingredients API"""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_login_required(self):
+        """Test that login is required to access the endpoint"""
+        res = self.client.get(INGREDIENTS_URL)
+
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PrivateIngredientsApiTests(TestCase):
+    """Test the private ingredients API"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            'test@user.com',
+            'testpass'
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_retrieve_ingredient_list(self):
+        """Test retrieving a list of ingredients"""
+        Ingredient.objects.create(user=self.user, name='Kale')
+        Ingredient.objects.create(user=self.user, name='Salt')
+
+        res = self.client.get(INGREDIENTS_URL)
+
+        ingredients = Ingredient.objects.all().order_by('-name')
+        serializer = IngredientSerializer(ingredients, many=True)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data, serializer.data)
+
+    def test_ingredients_limited_to_user(self):
+        """Test that ingredients for the authenticated user are returend"""
+        user2 = get_user_model().objects.create_user(
+            'other@user.com',
+            'testpass'
+        )
+        Ingredient.objects.create(user=user2, name='Vinegar')
+        ingredient = Ingredient.objects.create(user=self.user, name='Tumeric')
+
+        res = self.client.get(INGREDIENTS_URL)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(res.data[0]['name'], ingredient.name)
+
+    def test_create_ingredient_successful(self):
+        """Test create a new ingredient"""
+        payload = {'name': 'Cabbage'}
+        self.client.post(INGREDIENTS_URL, payload)
+
+        exists = Ingredient.objects.filter(
+            user=self.user,
+            name=payload['name'],
+        ).exists()
+        self.assertTrue(exists)
+
+    def test_create_ingredient_invalid(self):
+        """Test creating invalid ingredient fails"""
+        payload = {'name': ''}
+        res = self.client.post(INGREDIENTS_URL, payload)
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
 

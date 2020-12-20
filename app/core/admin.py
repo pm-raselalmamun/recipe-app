@@ -1,5 +1,5 @@
-from .models import User, Tag
 from django.contrib import admin
+from .models import User, Tag, Ingredient
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 
@@ -36,3 +36,13 @@ class TagAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Tag, TagAdmin)
+
+
+class IngredientAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'user']
+
+    class Meta:
+        model = Ingredient
+
+
+admin.site.register(Ingredient, IngredientAdmin)
