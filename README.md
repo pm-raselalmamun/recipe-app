@@ -25,6 +25,8 @@ To Create Recipe App API with Django & Test Project
 
 > - <a href="#recipe">8. Create Recipe Endpoints </a>
 
+> - <a href="#image">9. Upload Image Endpoints </a>
+
 ## 1. Docker Environment Setup <a href="" name="docker"> - </a>
 
 1. Create Files - `Dockerfile` & `requirements.txt` & `docker-compose.yml`
@@ -1613,3 +1615,201 @@ class PrivateRecipeApiTests(TestCase):
         self.assertEqual(len(tags), 0)
 
 ```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+## 9. Upload Image Endpoints <a href="" name="image"> - </a>
+
+> - <a href="#image_docker">I. Setup Docker & Settings File </a>
+
+> - <a href="#image_models">II. Modify the Models </a>
+
+> - <a href="#image_endpoints">III. Create Image Endpoints </a>
+
+
+### I. Setup Docker File <a href="" name="image_docker"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/docker.svg" /> &nbsp;&nbsp;Dockerfile -
+
+```yml
+RUN apk add --update --no-cache postgresql-client jpeg-dev
+RUN apk add --update --no-cache --virtual .tmp-build-deps gcc libc-dev linux-headers postgresql-dev musl-dev zlib zlib-dev
+
+RUN mkdir -p /vol/web/media
+RUN mkdir -p /vol/web/static
+RUN adduser -D user
+RUN chown -R user:user /vol/
+RUN chmod -R 755 /vol/web
+USER user
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/keycdn.svg" /> &nbsp;&nbsp; requirements.txt -
+
+```py
+Pillow>=8.0.1,<8.1.0
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" /> &nbsp;&nbsp; app > app > settings.py -
+
+```py
+MEDIA_URL = '/media/'
+
+MEDIA_ROOT = '/vol/web/media'
+
+STATIC_ROOT = '/vol/web/static'
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" /> &nbsp;&nbsp; app > app > urls.py -
+
+```py
+from django.conf.urls.static import static
+from django.conf import settings
+
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+```
+
+### II. Modify the Models <a href="" name="image_models"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > models.py -
+
+```py
+import os
+import uuid
+
+def recipe_image_file_path(instance, filename):
+    """Generate file path for new recipe image"""
+    ext = filename.split('.')[-1]
+    filename = f'{uuid.uuid4()}.{ext}'
+
+    return os.path.join('uploads/recipe/', filename)
+
+
+class Recipe(models.Model):
+    image = models.ImageField(null=True, upload_to=recipe_image_file_path)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > tests > test_models.py
+
+```py
+from unittest.mock import patch
+from core.models import recipe_image_file_path
+
+class UserAccountTests(TestCase):
+
+    @patch('uuid.uuid4')
+    def test_recipe_file_name_uuid(self, mock_uuid):
+        """Test that image is saved in the correct location"""
+        uuid = 'test-uuid'
+        mock_uuid.return_value = uuid
+        file_path = recipe_image_file_path(None, 'myimage.jpg')
+
+        exp_path = f'uploads/recipe/{uuid}.jpg'
+        self.assertEqual(file_path, exp_path)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py makemigrations"`\
+`docker-compose run app sh -c "python manage.py migrate"`\
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+### III. Create Image Endpoints <a href="" name="image_endpoints"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > serializers.py -
+
+```py
+class RecipeImageSerializer(serializers.ModelSerializer):
+    """Serializer for uploading images to recipes"""
+
+    class Meta:
+        model = Recipe
+        fields = ('id', 'image')
+        read_only_fields = ('id',)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > views.py -
+
+```py
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework import status
+from .serializers import RecipeImageSerializer
+
+class RecipeViewSet(viewsets.ModelViewSet):
+    def get_serializer_class(self):
+        """Return appropriate serializer class"""
+        if self.action == 'retrieve':
+            return RecipeDetailSerializer
+        elif self.action == 'upload_image':
+            return RecipeImageSerializer
+
+        return self.serializer_class
+
+    @action(methods=['POST'], detail=True, url_path='upload-image')
+    def upload_image(self, request, pk=None):
+        """Upload an image to a recipe"""
+        recipe = self.get_object()
+        serializer = self.get_serializer(recipe, data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_recipe.py -
+
+```py
+import os
+import tempfile
+from PIL import Image
+
+def image_upload_url(recipe_id):
+    """Return URL for recipe image upload"""
+    return reverse('recipe:recipe-upload-image', args=[recipe_id])
+
+class RecipeImageUploadTests(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            'user@user.com',
+            'testpass'
+        )
+        self.client.force_authenticate(self.user)
+        self.recipe = sample_recipe(user=self.user)
+
+    def tearDown(self):
+        self.recipe.image.delete()
+
+    def test_upload_image_to_recipe(self):
+        """Test uploading an image to recipe"""
+        url = image_upload_url(self.recipe.id)
+        with tempfile.NamedTemporaryFile(suffix='.jpg') as ntf:
+            img = Image.new('RGB', (10, 10))
+            img.save(ntf, format='JPEG')
+            ntf.seek(0)
+            response = self.client.post(url, {'image': ntf}, format='multipart')
+
+        self.recipe.refresh_from_db()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('image', response.data)
+        self.assertTrue(os.path.exists(self.recipe.image.path))
+
+    def test_upload_image_bad_request(self):
+        """Test uploading an invalid image"""
+        url = image_upload_url(self.recipe.id)
+        response = self.client.post(url, {'image': 'notimage'}, format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
