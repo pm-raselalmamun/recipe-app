@@ -23,6 +23,8 @@ To Create Recipe App API with Django & Test Project
 
 > - <a href="#ingredients">7. Create Ingredients Endpoints </a>
 
+> - <a href="#recipe">8. Create Recipe Endpoints </a>
+
 ## 1. Docker Environment Setup <a href="" name="docker"> - </a>
 
 1. Create Files - `Dockerfile` & `requirements.txt` & `docker-compose.yml`
@@ -1209,3 +1211,405 @@ class PrivateIngredientsApiTests(TestCase):
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
 `docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+
+## 8. Create Recipe Endpoints <a href="" name="recipe"> - </a>
+
+> - <a href="#recipe_model">I. Create Recipe Model </a>
+
+> - <a href="#recipe_endpoints">II. Create Recipe Endpoints </a>
+
+> - <a href="#details_endpoints">III. Create Recipe Details Endpoints </a>
+
+> - <a href="#create_recipe">IV. Send Post Request for Create Recipe </a>
+
+> - <a href="#update_recipe">V. Send Post Request for Update Recipe </a>
+
+### I. Create Recipe Model <a href="" name="recipe_model"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > models.py -
+
+```py
+class Recipe(models.Model):
+    """Recipe object"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255)
+    time_minutes = models.IntegerField()
+    price = models.DecimalField(max_digits=5, decimal_places=2)
+    link = models.CharField(max_length=255, blank=True)
+    ingredients = models.ManyToManyField('Ingredient')
+    tags = models.ManyToManyField('Tag')
+
+    def __str__(self):
+        return self.title
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > admin.py -
+
+```py
+from .models import Recipe
+
+class RecipeAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'price', 'time_minutes']
+
+    class Meta:
+        model = Recipe
+
+
+admin.site.register(Recipe, RecipeAdmin)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > core > tests > test_models.py
+
+```py
+from core.models import Recipe
+
+
+class UserAccountTests(TestCase):
+    def test_recipe_str(self):
+        """Test the recipe string representation"""
+        recipe = Recipe.objects.create(
+            user=sample_user(),
+            title='Steak and mushroom sauce',
+            time_minutes=5,
+            price=5.00
+        )
+
+        self.assertEqual(str(recipe), recipe.title)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py makemigrations"`\
+`docker-compose run app sh -c "python manage.py migrate"`\
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+### II. Create Recipe Endpoints <a href="" name="recipe_endpoints"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > serializers.py -
+
+```py
+from core.models import Ingredient, Tag, Recipe
+
+class RecipeSerializer(serializers.ModelSerializer):
+    """Serialize a recipe"""
+    ingredients = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Ingredient.objects.all()
+    )
+    tags = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Tag.objects.all()
+    )
+
+    class Meta:
+        model = Recipe
+        fields = (
+            'id', 'title', 'ingredients', 'tags', 'time_minutes',
+            'price', 'link'
+        )
+        read_only_fields = ('id',)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > views.py -
+
+```py
+from core.models import Recipe
+from .serializers import RecipeSerializer
+
+
+class RecipeViewSet(viewsets.ModelViewSet):
+    """Manage recipes in the database"""
+    serializer_class = RecipeSerializer
+    queryset = Recipe.objects.all()
+    authentication_classes = (TokenAuthentication,)
+    permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self):
+        """Retrieve the recipes for the authenticated user"""
+        queryset = self.queryset
+        return queryset.filter(user=self.request.user)
+
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > urls.py -
+
+```py
+from .views import RecipeViewSet
+
+router.register('recipes', RecipeViewSet)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_recipe.py -
+
+```py
+from django.urls import reverse
+from django.test import TestCase
+from rest_framework import status
+from core.models import Recipe
+from rest_framework.test import APIClient
+from django.contrib.auth import get_user_model
+from recipe.serializers import RecipeSerializer
+
+
+RECIPES_URL = reverse('recipe:recipe-list')
+
+
+def sample_recipe(user, **params):
+    """Create and return a sample recipe"""
+    defaults = {
+        'title': 'Sample recipe',
+        'time_minutes': 10,
+        'price': 5.00
+    }
+    defaults.update(params)
+
+    return Recipe.objects.create(user=user, **defaults)
+
+
+class PublicRecipeApiTests(TestCase):
+    """Test unauthenticated recipe API access"""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_auth_required(self):
+        """Test that authentication is required"""
+        response = self.client.get(RECIPES_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class PrivateRecipeApiTests(TestCase):
+    """Test unauthenticated recipe API access"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            'test@user.com',
+            'testpass'
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_retrieve_recipes(self):
+        """Test retrieving a list of recipes"""
+        sample_recipe(user=self.user)
+        sample_recipe(user=self.user)
+
+        response = self.client.get(RECIPES_URL)
+
+        recipes = Recipe.objects.all().order_by('-id')
+        serializer = RecipeSerializer(recipes, many=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, serializer.data)
+
+    def test_recipes_limited_to_user(self):
+        """Test retrieving recipes for user"""
+        user2 = get_user_model().objects.create_user(
+            'other@user.com',
+            'password123'
+        )
+        sample_recipe(user=user2)
+        sample_recipe(user=self.user)
+
+        response = self.client.get(RECIPES_URL)
+
+        recipes = Recipe.objects.filter(user=self.user)
+        serializer = RecipeSerializer(recipes, many=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data, serializer.data)
+
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+### III. Create Recipe Details Endpoints <a href="" name="details_endpoints"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > serializers.py -
+
+```py
+class RecipeDetailSerializer(RecipeSerializer):
+    """Serialize a recipe detail"""
+    ingredients = IngredientSerializer(many=True, read_only=True)
+    tags = TagSerializer(many=True, read_only=True)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > views.py -
+
+```py
+from .serializers import RecipeDetailSerializer
+
+class RecipeViewSet(viewsets.ModelViewSet):
+
+    def get_serializer_class(self):
+        """Return appropriate serializer class"""
+        if self.action == 'retrieve':
+            return RecipeDetailSerializer
+
+        return self.serializer_class
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_recipe.py -
+
+```py
+from recipe.serializers import RecipeDetailSerializer
+
+def detail_url(recipe_id):
+    """Return recipe detail URL"""
+    return reverse('recipe:recipe-detail', args=[recipe_id])
+
+
+def sample_tag(user, name='Main course'):
+    """Create and return a sample tag"""
+    return Tag.objects.create(user=user, name=name)
+
+
+def sample_ingredient(user, name='Cinnamon'):
+    """Create and return a sample ingredient"""
+    return Ingredient.objects.create(user=user, name=name)
+
+
+class PrivateRecipeApiTests(TestCase):
+
+    def test_view_recipe_detail(self):
+        """Test viewing a recipe detail"""
+        recipe = sample_recipe(user=self.user)
+        recipe.tags.add(sample_tag(user=self.user))
+        recipe.ingredients.add(sample_ingredient(user=self.user))
+
+        url = detail_url(recipe.id)
+        response = self.client.get(url)
+
+        serializer = RecipeDetailSerializer(recipe)
+        self.assertEqual(response.data, serializer.data)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+### IV. Send Post Request for Create Recipe <a href="" name="create_recipe"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > views.py -
+
+```py
+class RecipeViewSet(viewsets.ModelViewSet):
+    def perform_create(self, serializer):
+        """Create a new recipe"""
+        serializer.save(user=self.request.user)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_recipe.py -
+
+```py
+class PrivateRecipeApiTests(TestCase):
+    def test_create_basic_recipe(self):
+        """Test creating recipe"""
+        payload = {
+            'title': 'Chocolate cheesecake',
+            'time_minutes': 30,
+            'price': 5.00
+        }
+        response = self.client.post(RECIPES_URL, payload)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        recipe = Recipe.objects.get(id=response.data['id'])
+        for key in payload.keys():
+            self.assertEqual(payload[key], getattr(recipe, key))
+
+    def test_create_recipe_with_tags(self):
+        """Test creating a recipe with tags"""
+        tag1 = sample_tag(user=self.user, name='Vegan')
+        tag2 = sample_tag(user=self.user, name='Dessert')
+        payload = {
+            'title': 'Avocado lime cheesecake',
+            'tags': [tag1.id, tag2.id],
+            'time_minutes': 60,
+            'price': 20.00
+        }
+        response = self.client.post(RECIPES_URL, payload)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        recipe = Recipe.objects.get(id=response.data['id'])
+        tags = recipe.tags.all()
+        self.assertEqual(tags.count(), 2)
+        self.assertIn(tag1, tags)
+        self.assertIn(tag2, tags)
+
+    def test_create_recipe_with_ingredients(self):
+        """Test creating recipe with ingredients"""
+        ingredient1 = sample_ingredient(user=self.user, name='Prawns')
+        ingredient2 = sample_ingredient(user=self.user, name='Ginger')
+        payload = {
+            'title': 'Thai prawn red curry',
+            'ingredients': [ingredient1.id, ingredient2.id],
+            'time_minutes': 20,
+            'price': 7.00
+        }
+        response = self.client.post(RECIPES_URL, payload)
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        recipe = Recipe.objects.get(id=response.data['id'])
+        ingredients = recipe.ingredients.all()
+        self.assertEqual(ingredients.count(), 2)
+        self.assertIn(ingredient1, ingredients)
+        self.assertIn(ingredient2, ingredients)
+
+```
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
+`docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+### V. Send Post Request for Update Recipe <a href="" name="update_recipe"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_recipe.py -
+
+```py
+class PrivateRecipeApiTests(TestCase):
+    def test_partial_update_recipe(self):
+        """Test updating a recipe with patch"""
+        recipe = sample_recipe(user=self.user)
+        recipe.tags.add(sample_tag(user=self.user))
+        new_tag = sample_tag(user=self.user, name='Curry')
+
+        payload = {'title': 'Chicken tikka', 'tags': [new_tag.id]}
+        url = detail_url(recipe.id)
+        self.client.patch(url, payload)
+
+        recipe.refresh_from_db()
+        self.assertEqual(recipe.title, payload['title'])
+        tags = recipe.tags.all()
+        self.assertEqual(len(tags), 1)
+        self.assertIn(new_tag, tags)
+
+    def test_full_update_recipe(self):
+        """Test updating a recipe with put"""
+        recipe = sample_recipe(user=self.user)
+        recipe.tags.add(sample_tag(user=self.user))
+        payload = {
+            'title': 'Spaghetti carbonara',
+            'time_minutes': 25,
+            'price': 5.00
+        }
+        url = detail_url(recipe.id)
+        self.client.put(url, payload)
+
+        recipe.refresh_from_db()
+        self.assertEqual(recipe.title, payload['title'])
+        self.assertEqual(recipe.time_minutes, payload['time_minutes'])
+        self.assertEqual(recipe.price, payload['price'])
+        tags = recipe.tags.all()
+        self.assertEqual(len(tags), 0)
+
+```
