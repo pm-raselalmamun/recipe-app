@@ -27,6 +27,8 @@ To Create Recipe App API with Django & Test Project
 
 > - <a href="#image">9. Upload Image Endpoints </a>
 
+> - <a href="#filter">10. Filter the Endpoints </a>
+
 ## 1. Docker Environment Setup <a href="" name="docker"> - </a>
 
 1. Create Files - `Dockerfile` & `requirements.txt` & `docker-compose.yml`
@@ -1813,3 +1815,196 @@ class RecipeImageUploadTests(TestCase):
 
 <img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/powershell.svg" /> &nbsp;&nbsp;Command - \
 `docker-compose run app sh -c "python manage.py test && flake8"`
+
+
+## 10. Filter the Endpoints <a href="" name="filter"> - </a>
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > views.py -
+
+```py
+class BaseRecipeAttrViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateModelMixin):
+    def get_queryset(self):
+        """Return objects for the current authenticated user only"""
+        assigned_only = bool(
+            int(self.request.query_params.get('assigned_only', 0))
+        )
+        queryset = self.queryset
+        if assigned_only:
+            queryset = queryset.filter(recipe__isnull=False)
+
+        return queryset.filter(user=self.request.user).order_by('-name').distinct()
+
+
+class RecipeViewSet(viewsets.ModelViewSet):
+    def _params_to_ints(self, qs):
+        """Convert a list of string IDs to a list of integers"""
+        return [int(str_id) for str_id in qs.split(',')]
+
+    def get_queryset(self):
+        """Retrieve the recipes for the authenticated user"""
+        tags = self.request.query_params.get('tags')
+        ingredients = self.request.query_params.get('ingredients')
+        queryset = self.queryset
+        if tags:
+            tag_ids = self._params_to_ints(tags)
+            queryset = queryset.filter(tags__id__in=tag_ids)
+        if ingredients:
+            ingredient_ids = self._params_to_ints(ingredients)
+            queryset = queryset.filter(ingredients__id__in=ingredient_ids)
+
+        return queryset.filter(user=self.request.user)
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_recipe.py -
+
+```py
+class RecipeImageUploadTests(TestCase):
+    def test_filter_recipes_by_tags(self):
+        """Test returning recipes with specific tags"""
+        recipe1 = sample_recipe(user=self.user, title='Thai vegetable curry')
+        recipe2 = sample_recipe(user=self.user, title='Aubergine with tahini')
+        tag1 = sample_tag(user=self.user, name='Vegan')
+        tag2 = sample_tag(user=self.user, name='Vegetarian')
+        recipe1.tags.add(tag1)
+        recipe2.tags.add(tag2)
+        recipe3 = sample_recipe(user=self.user, title='Fish and chips')
+
+        response = self.client.get(
+            RECIPES_URL,
+            {'tags': f'{tag1.id},{tag2.id}'}
+        )
+
+        serializer1 = RecipeSerializer(recipe1)
+        serializer2 = RecipeSerializer(recipe2)
+        serializer3 = RecipeSerializer(recipe3)
+        self.assertIn(serializer1.data, response.data)
+        self.assertIn(serializer2.data, response.data)
+        self.assertNotIn(serializer3.data, response.data)
+
+    def test_filter_recipes_by_ingredients(self):
+        """Test returning recipes with specific ingredients"""
+        recipe1 = sample_recipe(user=self.user, title='Posh beans on toast')
+        recipe2 = sample_recipe(user=self.user, title='Chicken cacciatore')
+        ingredient1 = sample_ingredient(user=self.user, name='Feta cheese')
+        ingredient2 = sample_ingredient(user=self.user, name='Chicken')
+        recipe1.ingredients.add(ingredient1)
+        recipe2.ingredients.add(ingredient2)
+        recipe3 = sample_recipe(user=self.user, title='Steak and mushrooms')
+
+        response = self.client.get(
+            RECIPES_URL,
+            {'ingredients': f'{ingredient1.id},{ingredient2.id}'}
+        )
+
+        serializer1 = RecipeSerializer(recipe1)
+        serializer2 = RecipeSerializer(recipe2)
+        serializer3 = RecipeSerializer(recipe3)
+        self.assertIn(serializer1.data, response.data)
+        self.assertIn(serializer2.data, response.data)
+        self.assertNotIn(serializer3.data, response.data)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_tags.py -
+
+```py
+from core.models import Tag, Recipe
+
+class PrivateTagsApiTests(TestCase):
+    def test_retrieve_tags_assigned_to_recipes(self):
+        """Test filtering tags by those assigned to recipes"""
+        tag1 = Tag.objects.create(user=self.user, name='Breakfast')
+        tag2 = Tag.objects.create(user=self.user, name='Lunch')
+        recipe = Recipe.objects.create(
+            title='Coriander eggs on toast',
+            time_minutes=10,
+            price=5.00,
+            user=self.user
+        )
+        recipe.tags.add(tag1)
+
+        response = self.client.get(TAGS_URL, {'assigned_only': 1})
+
+        serializer1 = TagSerializer(tag1)
+        serializer2 = TagSerializer(tag2)
+        self.assertIn(serializer1.data, response.data)
+        self.assertNotIn(serializer2.data, response.data)
+
+    def test_retrieve_tags_assigned_unique(self):
+        """Test filtering tags by assigned returns unique items"""
+        tag = Tag.objects.create(user=self.user, name='Breakfast')
+        Tag.objects.create(user=self.user, name='Lunch')
+        recipe1 = Recipe.objects.create(
+            title='Pancakes',
+            time_minutes=5,
+            price=3.00,
+            user=self.user
+        )
+        recipe1.tags.add(tag)
+        recipe2 = Recipe.objects.create(
+            title='Porridge',
+            time_minutes=3,
+            price=2.00,
+            user=self.user
+        )
+        recipe2.tags.add(tag)
+
+        response = self.client.get(TAGS_URL, {'assigned_only': 1})
+
+        self.assertEqual(len(response.data), 1)
+
+```
+
+<img width="18" src="https://cdn.jsdelivr.net/npm/simple-icons@v4/icons/python.svg" />&nbsp;&nbsp; app > recipe > tests > test_ingredients.py -
+
+```py
+from core.models import Ingredient, Recipe
+
+class PrivateIngredientsApiTests(TestCase):
+    def test_retrieve_ingredients_assigned_to_recipes(self):
+        """Test filtering ingredients by those assigned to recipes"""
+        ingredient1 = Ingredient.objects.create(
+            user=self.user, name='Apples'
+        )
+        ingredient2 = Ingredient.objects.create(
+            user=self.user, name='Turkey'
+        )
+        recipe = Recipe.objects.create(
+            title='Apple crumble',
+            time_minutes=5,
+            price=10,
+            user=self.user
+        )
+        recipe.ingredients.add(ingredient1)
+
+        res = self.client.get(INGREDIENTS_URL, {'assigned_only': 1})
+
+        serializer1 = IngredientSerializer(ingredient1)
+        serializer2 = IngredientSerializer(ingredient2)
+        self.assertIn(serializer1.data, res.data)
+        self.assertNotIn(serializer2.data, res.data)
+
+    def test_retrieve_ingredients_assigned_unique(self):
+        """Test filtering ingredients by assigned returns unique items"""
+        ingredient = Ingredient.objects.create(user=self.user, name='Eggs')
+        Ingredient.objects.create(user=self.user, name='Cheese')
+        recipe1 = Recipe.objects.create(
+            title='Eggs benedict',
+            time_minutes=30,
+            price=12.00,
+            user=self.user
+        )
+        recipe1.ingredients.add(ingredient)
+        recipe2 = Recipe.objects.create(
+            title='Coriander eggs on toast',
+            time_minutes=20,
+            price=5.00,
+            user=self.user
+        )
+        recipe2.ingredients.add(ingredient)
+
+        res = self.client.get(INGREDIENTS_URL, {'assigned_only': 1})
+
+        self.assertEqual(len(res.data), 1)
+
+```
